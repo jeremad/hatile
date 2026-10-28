@@ -109,7 +109,7 @@ def read_auth_key() -> bytes:
     )
     try:
         key = base64.b64decode(value.strip(), validate=True)
-    except (binascii.Error, ValueError):
+    except binascii.Error, ValueError:
         key = b""
     if len(key) != tp.AUTH_KEY_LENGTH:
         sys.exit(f"The auth key must be {tp.AUTH_KEY_LENGTH} bytes in base64.")

@@ -30,7 +30,7 @@ def decode_auth_key(value: str) -> bytes | None:
     """Return the decoded auth key, or None if it is not valid."""
     try:
         key = base64.b64decode(value, validate=True)
-    except (binascii.Error, ValueError):
+    except binascii.Error, ValueError:
         return None
     return key if len(key) == AUTH_KEY_LENGTH else None
 

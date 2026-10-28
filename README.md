@@ -91,6 +91,17 @@ logger:
 
 ## Development
 
+The development environment is managed with [Poetry](https://python-poetry.org/)
+and needs Python 3.14.2 or later, like Home Assistant. Install it, in `.venv`:
+
+```bash
+poetry install
+```
+
+It holds Home Assistant, its test harness and the requirements of its
+Bluetooth integration. Home Assistant provides those at runtime: the
+integration itself has no requirements.
+
 The protocol lives in `custom_components/hatile/tile_protocol.py`, with no Home
 Assistant dependency. It is a client for TOA (Tile Over-the-Air), the protocol
 Tile trackers speak over Bluetooth LE. Its sources:
@@ -104,21 +115,36 @@ Tile trackers speak over Bluetooth LE. Its sources:
   the Tile app: session key, MIC, and the song and keep-alive sub-commands. The
   stop sub-command is inferred from node-tile's response codes.
 
-Its tests run against a simulated Tile:
+The tests run the protocol against a simulated Tile, and the integration
+inside Home Assistant with a mocked Bluetooth stack:
 
 ```bash
-python3 -m unittest discover -s tests -v
+poetry run pytest
 ```
 
 The simulated Tile follows those sources, not real hardware: test changes on a
-real Tile too. `scripts/ring.py` rings (or, with `--stop`, stops) a Tile from a
-computer with the same protocol code; it needs `pip install bleak`.
-
-The tests of the integration itself run inside Home Assistant, with a mocked
-Bluetooth stack. They need
-[pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component)
-and the requirements of Home Assistant's `bluetooth` and `usb` integrations:
+real Tile too, from a computer, with the same protocol code:
 
 ```bash
-pytest
+poetry run python scripts/ring.py AA:BB:CC:DD:EE:FF
 ```
+
+It asks for the auth key, then rings the Tile; `--stop` stops it instead.
+
+The code is linted and formatted with [ruff](https://docs.astral.sh/ruff/):
+
+```bash
+poetry run ruff check --fix
+```
+
+```bash
+poetry run ruff format
+```
+
+GitHub Actions runs the same checks and the tests on every pull request and
+every push to `main`, from `.github/workflows/ci.yml`.
+
+Home Assistant's version comes from
+[pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component):
+when updating it, update the Bluetooth requirements in `pyproject.toml` to
+the versions of that Home Assistant release.
