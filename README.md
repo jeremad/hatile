@@ -145,6 +145,10 @@ poetry run ruff format
 GitHub Actions runs the same checks and the tests on every pull request and
 every push to `main`, from `.github/workflows/ci.yml`.
 
+The icon Home Assistant shows for the integration is in
+`custom_components/hatile/brand/`, drawn from the SVG files in `assets/`:
+after changing one, render it again to its two PNG files, at 256 and 512 px.
+
 Home Assistant's version comes from
 [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component):
 when updating it, update the Bluetooth requirements in `pyproject.toml` to
