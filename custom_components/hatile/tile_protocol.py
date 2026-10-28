@@ -268,9 +268,7 @@ class SongSession:
             if payload[0] == _SONG_ACCEPTED[self._song_command[0]]:
                 self.accepted = True
                 self._pending = _CMD_CLOSE_CHANNEL
-                return self._signed(
-                    _CMD_CLOSE_CHANNEL, bytes([_CLOSE_REASON_NO_ERROR])
-                )
+                return self._signed(_CMD_CLOSE_CHANNEL, bytes([_CLOSE_REASON_NO_ERROR]))
             if payload[0] == _FEATURE_RSP_ERROR:
                 error = payload[2] if len(payload) > 2 else None
                 raise TileProtocolError(

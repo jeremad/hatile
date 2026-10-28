@@ -14,6 +14,8 @@ package-mode = false
 [tool.poetry.group.dev.dependencies]
 # Pins homeassistant itself, 2026.10.4 for this version.
 pytest-homeassistant-custom-component = "0.13.375"
+# Pinned: its rules change between versions.
+ruff = "0.17.3"
 # Requirements of Home Assistant's bluetooth and usb integrations, which the
 # test harness does not install. Keep them at the versions of the
 # homeassistant pinned above, from their manifest.json.
@@ -31,3 +33,33 @@ serialx = "1.11.0"
 asyncio_mode = "auto"
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "B",   # flake8-bugbear
+    "E",   # pycodestyle errors
+    "F",   # Pyflakes
+    "I",   # isort
+    "RUF", # Ruff-specific rules
+    "SIM", # flake8-simplify
+    "UP",  # pyupgrade
+    "W",   # pycodestyle warnings
+]
+
+[tool.ruff.lint.isort]
+# As in Home Assistant, its imports form their own section.
+known-first-party = ["custom_components"]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "homeassistant",
+    "first-party",
+    "local-folder",
+]
+
+[tool.ruff.lint.isort.sections]
+homeassistant = ["homeassistant"]

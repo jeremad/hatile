@@ -146,9 +146,7 @@ class HelpersTest(unittest.TestCase):
     def test_nonce_bytes_is_64_bit_little_endian(self) -> None:
         self.assertEqual(tp.nonce_bytes(1), bytes([1, 0, 0, 0, 0, 0, 0, 0]))
         self.assertEqual(tp.nonce_bytes(256), bytes([0, 1, 0, 0, 0, 0, 0, 0]))
-        self.assertEqual(
-            tp.nonce_bytes(0x0102030405), bytes([5, 4, 3, 2, 1, 0, 0, 0])
-        )
+        self.assertEqual(tp.nonce_bytes(0x0102030405), bytes([5, 4, 3, 2, 1, 0, 0, 0]))
 
     def test_tile_hmac_pads_to_32_bytes(self) -> None:
         key = b"k" * 16

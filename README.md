@@ -131,6 +131,16 @@ poetry run python scripts/ring.py AA:BB:CC:DD:EE:FF
 
 It asks for the auth key, then rings the Tile; `--stop` stops it instead.
 
+The code is linted and formatted with [ruff](https://docs.astral.sh/ruff/):
+
+```bash
+poetry run ruff check --fix
+```
+
+```bash
+poetry run ruff format
+```
+
 Home Assistant's version comes from
 [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component):
 when updating it, update the Bluetooth requirements in `pyproject.toml` to
