@@ -24,6 +24,8 @@ This module has no Home Assistant dependency so it can be tested on its own.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import contextlib
 import hashlib
 import hmac
@@ -114,6 +116,10 @@ _CLIENT_MAX_PAYLOAD = 19
 # Bit of the first feature byte of TOA_RSP_READY that announces songs.
 _FEATURE_SONG_BIT = 3
 
+# Seconds between checks of the link while waiting for the Tile: a dropped
+# link sends no notification.
+_LINK_CHECK_INTERVAL = 1.0
+
 # SONG sub-commands and the response that accepts each. node-tile names
 # response 3 STOP_OK; that the stop command is 3 too is inferred.
 _SONG_CMD_PLAY = 0x02
@@ -124,11 +130,20 @@ _TKA_CMD_ACK = 0x03
 
 
 class TileProtocolError(Exception):
-    """The Tile reported an error or sent something unexpected."""
+    """The Tile reported an error, sent something unexpected or disconnected."""
 
 
 class TileAuthError(TileProtocolError):
     """The Tile rejected the auth key."""
+
+
+def decode_auth_key(value: str) -> bytes | None:
+    """Return the auth key encoded in base64 in value, or None if it is not valid."""
+    try:
+        key = base64.b64decode(value, validate=True)
+    except binascii.Error, ValueError:
+        return None
+    return key if len(key) == AUTH_KEY_LENGTH else None
 
 
 def nonce_bytes(nonce: int) -> bytes:
@@ -339,6 +354,10 @@ class RingSession(SongSession):
 class GattClient(Protocol):
     """The part of a connected Bleak client this module uses."""
 
+    @property
+    def is_connected(self) -> bool:
+        """Return whether the link to the device is up."""
+
     async def start_notify(
         self, char_specifier: str, callback: Callable[[Any, bytearray], None]
     ) -> None:
@@ -363,10 +382,11 @@ async def async_ring(
     """Make the Tile behind a connected client play its find song.
 
     Returns once the Tile confirms it is ringing and the channel is closed, or
-    close_timeout seconds after ringing if the Tile does not confirm the close.
-    Raises TileAuthError if the Tile rejects the auth key, TileProtocolError if
-    it reports another error, and TimeoutError if it does not start ringing
-    within timeout seconds.
+    once closing the channel fails or takes more than close_timeout seconds:
+    the Tile rings anyway. Raises TileAuthError if the Tile rejects the auth
+    key, TileProtocolError if it reports another error or disconnects, and
+    TimeoutError if it does not start ringing within timeout seconds. Errors of
+    the client itself, such as a failed write, propagate as they are.
     """
     session = RingSession(
         auth_key, strength=strength, duration=duration, randbytes=randbytes
@@ -399,29 +419,43 @@ async def _async_run(
     def on_notify(_sender: Any, data: bytearray) -> None:
         queue.put_nowait(bytes(data))
 
-    async def send(data: bytes) -> None:
-        _LOGGER.debug("TX %s", data.hex())
-        await client.write_gatt_char(COMMAND_UUID, data, response=False)
+    async def receive() -> bytes:
+        while True:
+            with contextlib.suppress(TimeoutError):
+                async with asyncio.timeout(_LINK_CHECK_INTERVAL):
+                    return await queue.get()
+            if queue.empty() and not client.is_connected:
+                raise TileProtocolError(
+                    f"the Tile disconnected before answering {session.waiting_for}"
+                )
 
-    async def exchange() -> None:
-        data = await queue.get()
+    async def exchange(message: bytes | None) -> bytes | None:
+        """Send message, if any, and return the reply to the next notification."""
+        if message is not None:
+            _LOGGER.debug("TX %s", message.hex())
+            await client.write_gatt_char(COMMAND_UUID, message, response=False)
+        data = await receive()
         _LOGGER.debug("RX %s", data.hex())
-        reply = session.handle(data)
-        if reply is not None:
-            await send(reply)
+        return session.handle(data)
 
-    await client.start_notify(RESPONSE_UUID, on_notify)
-    await send(session.start())
+    message: bytes | None = session.start()
     try:
-        async with asyncio.timeout(timeout):
+        async with asyncio.timeout(timeout) as deadline:
+            await client.start_notify(RESPONSE_UUID, on_notify)
             while not session.accepted:
-                await exchange()
+                message = await exchange(message)
     except TimeoutError as err:
+        # Leave a timeout of the client, such as a write, as it is.
+        if not deadline.expired():
+            raise
         raise TimeoutError(
             f"no answer to {session.waiting_for} within {timeout:g} s"
         ) from err
-    # The command took effect whether or not the Tile confirms the close.
-    with contextlib.suppress(TimeoutError):
+    # The command took effect: whatever happens to the close, the Tile rings.
+    try:
         async with asyncio.timeout(close_timeout):
             while not session.closed:
-                await exchange()
+                message = await exchange(message)
+    except Exception as err:
+        # Any exception: this module does not know the errors of the client.
+        _LOGGER.debug("Channel not closed: %r", err)

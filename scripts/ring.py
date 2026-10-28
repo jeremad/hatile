@@ -12,8 +12,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import base64
-import binascii
 import getpass
 import importlib.util
 import logging
@@ -107,30 +105,45 @@ def read_auth_key() -> bytes:
     value = os.environ.get("TILE_AUTH_KEY") or getpass.getpass(
         "Auth key (base64, not shown): "
     )
-    try:
-        key = base64.b64decode(value.strip(), validate=True)
-    except binascii.Error, ValueError:
-        key = b""
-    if len(key) != tp.AUTH_KEY_LENGTH:
+    key = tp.decode_auth_key(value.strip())
+    if key is None:
         sys.exit(f"The auth key must be {tp.AUTH_KEY_LENGTH} bytes in base64.")
     return key
 
 
-async def main() -> int:
-    """Find the Tile, connect and ring it."""
+def duration(value: str) -> int:
+    """Return a ring duration given on the command line."""
+    seconds = int(value)
+    if not 1 <= seconds <= tp.SONG_DURATION_FOREVER:
+        raise argparse.ArgumentTypeError(
+            f"must be between 1 and {tp.SONG_DURATION_FOREVER}"
+        )
+    return seconds
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Return the command-line arguments, checked before any Bluetooth work."""
     parser = argparse.ArgumentParser(description="Ring a Tile over Bluetooth.")
     parser.add_argument("address", help="the Tile's MAC address")
     parser.add_argument("--device", help="Bluetooth ID printed by a previous run")
     parser.add_argument(
-        "--strength", type=int, default=tp.MAX_STRENGTH, help="1 (quiet) to 3"
+        "--strength",
+        type=int,
+        choices=range(1, tp.MAX_STRENGTH + 1),
+        default=tp.MAX_STRENGTH,
+        help="1 (quiet) to 3",
     )
     parser.add_argument(
-        "--duration", type=int, help="seconds to ring, 254 for once, 255 forever"
+        "--duration", type=duration, help="seconds to ring, 254 for once, 255 forever"
     )
     parser.add_argument("--scan-time", type=float, default=15.0)
     parser.add_argument("--stop", action="store_true", help="stop the song instead")
-    args = parser.parse_args()
+    return parser.parse_args(argv)
 
+
+async def main() -> int:
+    """Find the Tile, connect and ring it."""
+    args = parse_args()
     auth_key = read_auth_key()
     logging.basicConfig(format="%(asctime)s %(name)s: %(message)s")
     logging.getLogger("tile_protocol").setLevel(logging.DEBUG)

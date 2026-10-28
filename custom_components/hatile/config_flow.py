@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import binascii
 import re
 from typing import Any
 
@@ -13,7 +11,7 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_ADDRESS, CONF_NAME
 
 from .const import CONF_AUTH_KEY, DOMAIN
-from .tile_protocol import AUTH_KEY_LENGTH
+from .tile_protocol import decode_auth_key
 
 MAC_RE = re.compile(r"(?:[0-9A-F]{2}:){5}[0-9A-F]{2}")
 
@@ -26,19 +24,12 @@ STEP_USER_SCHEMA = vol.Schema(
 )
 
 
-def decode_auth_key(value: str) -> bytes | None:
-    """Return the decoded auth key, or None if it is not valid."""
-    try:
-        key = base64.b64decode(value, validate=True)
-    except binascii.Error, ValueError:
-        return None
-    return key if len(key) == AUTH_KEY_LENGTH else None
-
-
 class HatileConfigFlow(ConfigFlow, domain=DOMAIN):
     """Add a Tile by its Bluetooth address and auth key."""
 
     VERSION = 1
+    # 2: the volume select of earlier versions is removed.
+    MINOR_VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

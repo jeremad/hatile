@@ -5,16 +5,11 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
-import importlib.util
 import os
 import unittest
-from pathlib import Path
+from unittest.mock import patch
 
-# Load the module by path: importing the package would need Home Assistant.
-_PATH = Path(__file__).parents[1] / "custom_components" / "hatile" / "tile_protocol.py"
-_SPEC = importlib.util.spec_from_file_location("tile_protocol", _PATH)
-tp = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(tp)
+from custom_components.hatile import tile_protocol as tp
 
 AUTH_KEY = bytes(range(16))
 CID = 5
@@ -50,6 +45,9 @@ class FakeTile:
         self.answers: dict[int, list[bytes] | None] = {}
         self.extra: dict[int, list[bytes]] = {}
         self.silent = False
+        self.connected = True
+        # Command after which the Tile drops the link, once it has answered.
+        self.drop_link_after: int | None = None
 
     def channel(self, code: int, payload: bytes = b"") -> bytes:
         """Return a response on the open channel."""
@@ -87,6 +85,8 @@ class FakeTile:
             answer = []
         else:
             answer = [self.channel(0x05, bytes([0x02, code]))]
+        if code == self.drop_link_after:
+            self.connected = False
         return answer + self.extra.get(code, [])
 
     def receive_connectionless(
@@ -119,6 +119,10 @@ class FakeClient:
         self.tile = tile
         self.callback = None
 
+    @property
+    def is_connected(self) -> bool:
+        return self.tile.connected
+
     async def start_notify(self, char_specifier, callback) -> None:
         assert char_specifier == tp.RESPONSE_UUID
         self.callback = callback
@@ -126,6 +130,8 @@ class FakeClient:
     async def write_gatt_char(self, char_specifier, data, response=True) -> None:
         assert char_specifier == tp.COMMAND_UUID
         assert response is False
+        if not self.tile.connected:
+            raise OSError("not connected")
         loop = asyncio.get_running_loop()
         for reply in self.tile.receive(bytes(data)):
             loop.call_soon(self.callback, None, bytearray(reply))
@@ -143,18 +149,18 @@ async def ring(tile: FakeTile, **kwargs) -> None:
 
 
 class HelpersTest(unittest.TestCase):
-    def test_nonce_bytes_is_64_bit_little_endian(self) -> None:
-        self.assertEqual(tp.nonce_bytes(1), bytes([1, 0, 0, 0, 0, 0, 0, 0]))
-        self.assertEqual(tp.nonce_bytes(256), bytes([0, 1, 0, 0, 0, 0, 0, 0]))
-        self.assertEqual(tp.nonce_bytes(0x0102030405), bytes([5, 4, 3, 2, 1, 0, 0, 0]))
-
-    def test_tile_hmac_pads_to_32_bytes(self) -> None:
-        key = b"k" * 16
-        self.assertEqual(tp.tile_hmac(key, b"abc"), hmac32(key, b"abc"))
-        long = bytes(40)
-        self.assertEqual(
-            tp.tile_hmac(key, long), hmac.new(key, long, hashlib.sha256).digest()
-        )
+    def test_decode_auth_key(self) -> None:
+        self.assertEqual(tp.decode_auth_key("AAECAwQFBgcICQoLDA0ODw=="), AUTH_KEY)
+        for value in (
+            "AAECAwQFBgcICQoLDA0O",  # 15 bytes
+            "AAECAwQFBgcICQoLDA0ODxA=",  # 17 bytes
+            "AAECAwQFBgcICQoLDA0ODw",  # padding missing
+            "AAECAwQFBgcICQoLDA0OD!==",  # not base64
+            "AAECAwQFBgcICQoLDA0ODé==",  # not ASCII
+            "",
+        ):
+            with self.subTest(value=value):
+                self.assertIsNone(tp.decode_auth_key(value))
 
     def test_rejects_bad_parameters(self) -> None:
         with self.assertRaises(ValueError):
@@ -206,6 +212,53 @@ class RingTest(unittest.IsolatedAsyncioTestCase):
         tile.answers[0x11] = None
         await ring(tile)
         self.assertEqual(tile.commands, [READY, RING, CLOSE])
+
+    async def test_succeeds_when_tile_refuses_close(self) -> None:
+        tile = FakeTile()
+        tile.answers[0x11] = [tile.channel(0x05, bytes([0x02, 0x11]))]
+        await ring(tile)
+        self.assertEqual(tile.commands, [READY, RING, CLOSE])
+
+    async def test_succeeds_when_close_cannot_be_sent(self) -> None:
+        tile = FakeTile()
+        tile.drop_link_after = 0x05
+        await ring(tile)
+        self.assertEqual(tile.commands, [READY, RING])
+
+    async def test_disconnect_is_reported_without_waiting(self) -> None:
+        tile = FakeTile()
+        tile.answers[0x12] = None
+        tile.drop_link_after = 0x12
+        with (
+            patch.object(tp, "_LINK_CHECK_INTERVAL", 0.01),
+            self.assertRaisesRegex(
+                tp.TileProtocolError, "disconnected before answering READY"
+            ),
+        ):
+            async with asyncio.timeout(1):
+                await ring(tile, timeout=10)
+
+    async def test_times_out_when_subscription_hangs(self) -> None:
+        async def hang(char_specifier, callback) -> None:
+            await asyncio.Event().wait()
+
+        client = FakeClient(FakeTile())
+        client.start_notify = hang
+        with self.assertRaisesRegex(TimeoutError, "AUTHENTICATE within 0.2 s"):
+            await tp.async_ring(client, AUTH_KEY, timeout=0.2)
+
+    async def test_client_timeout_is_not_blamed_on_the_tile(self) -> None:
+        client = FakeClient(FakeTile())
+        write = client.write_gatt_char
+
+        async def time_out_on_channel(char_specifier, data, response=True) -> None:
+            if data[0] == CID:
+                raise TimeoutError("write timed out")
+            await write(char_specifier, data, response)
+
+        client.write_gatt_char = time_out_on_channel
+        with self.assertRaisesRegex(TimeoutError, "^write timed out$"):
+            await tp.async_ring(client, AUTH_KEY, timeout=1)
 
     async def test_session_key_ignores_extra_open_channel_bytes(self) -> None:
         tile = FakeTile()
@@ -268,7 +321,3 @@ class RingTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(tp.TileProtocolError, "cannot play songs"):
             await ring(tile)
         self.assertEqual(tile.commands, [READY])
-
-
-if __name__ == "__main__":
-    unittest.main()

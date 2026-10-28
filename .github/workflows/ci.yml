@@ -29,6 +29,7 @@ jobs:
           cache: poetry
 
       - name: Install dependencies
+        id: install
         run: poetry install --no-interaction
 
       - name: Lint
@@ -39,5 +40,5 @@ jobs:
 
       # Run the tests even when linting fails, to report both.
       - name: Test
-        if: success() || failure()
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: poetry run pytest

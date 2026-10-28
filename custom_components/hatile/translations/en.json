@@ -52,6 +52,9 @@
     "not_in_range": {
       "message": "The Tile {address} is not in Bluetooth range."
     },
+    "not_connectable": {
+      "message": "Home Assistant hears the Tile {address}, but only through Bluetooth adapters or proxies that cannot connect to it."
+    },
     "ring_failed": {
       "message": "The Tile did not ring: {error}"
     },

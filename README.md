@@ -31,7 +31,8 @@ they cost it no battery.
 
 ## Requirements
 
-- Home Assistant with a working Bluetooth adapter (the `bluetooth` integration).
+- Home Assistant 2026.3 or later, with a working Bluetooth adapter (the
+  `bluetooth` integration).
 - The Tile within Bluetooth range of that adapter, roughly 10 m indoors.
 - The Tile not connected to a phone when you press the button: it accepts one
   connection at a time.
