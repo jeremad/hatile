@@ -1,7 +1,4 @@
-"""Tests for the integration inside Home Assistant, with a mocked Bluetooth stack.
-
-Run with pytest-homeassistant-custom-component installed: pytest tests/ha
-"""
+"""Tests for the integration inside Home Assistant, with a mocked Bluetooth stack."""
 
 from __future__ import annotations
 
@@ -14,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
+from bleak.exc import BleakError
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -46,11 +44,6 @@ PRESENCE = "binary_sensor.wallet_presence"
 SIGNAL = "sensor.wallet_signal_strength"
 
 
-@pytest.fixture(autouse=True)
-def auto_enable(enable_custom_integrations: None, enable_bluetooth: None) -> None:
-    """Load custom integrations and a mocked Bluetooth stack in every test."""
-
-
 @pytest.fixture
 async def entry(hass: HomeAssistant) -> MockConfigEntry:
     """Set up a Tile named Wallet."""
@@ -66,7 +59,7 @@ async def entry(hass: HomeAssistant) -> MockConfigEntry:
     return entry
 
 
-def hear_tile(hass: HomeAssistant, rssi: int = -60) -> None:
+def hear_tile(hass: HomeAssistant, rssi: int = -60, connectable: bool = True) -> None:
     """Make Home Assistant receive an advertisement of the Tile."""
     service_data = {TILE_SERVICE: b"\x02\x03"}
     advertisement = AdvertisementData(
@@ -89,7 +82,7 @@ def hear_tile(hass: HomeAssistant, rssi: int = -60) -> None:
             source=SOURCE_LOCAL,
             device=BLEDevice(address=ADDRESS, name=None, details={}),
             advertisement=advertisement,
-            connectable=True,
+            connectable=connectable,
             time=time.monotonic(),
             tx_power=-127,
             raw=None,
@@ -217,12 +210,45 @@ async def test_protocol_error_is_reported(
     client.disconnect.assert_awaited_once()
 
 
+async def test_failed_disconnect_keeps_the_outcome(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    hear_tile(hass)
+    client = AsyncMock()
+    client.disconnect.side_effect = BleakError("already disconnected")
+    with (
+        patch(
+            "custom_components.hatile.device.establish_connection",
+            return_value=client,
+        ),
+        patch("custom_components.hatile.device.async_ring") as ring,
+    ):
+        await press(hass, RING)
+        ring.side_effect = TileAuthError("wrong auth key")
+        with pytest.raises(HomeAssistantError) as err:
+            await press(hass, RING)
+    assert err.value.translation_key == "ring_failed"
+    assert client.disconnect.await_count == 2
+
+
 async def test_ring_out_of_range_is_reported(
     hass: HomeAssistant, entry: MockConfigEntry
 ) -> None:
     with pytest.raises(HomeAssistantError) as err:
         await press(hass, RING)
     assert err.value.translation_key == "not_in_range"
+
+
+async def test_ring_heard_only_by_passive_scanners_is_reported(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    hear_tile(hass, connectable=False)
+    await hass.async_block_till_done()
+    assert hass.states.get(PRESENCE).state == STATE_ON
+    with pytest.raises(HomeAssistantError) as err:
+        await press(hass, RING)
+    assert err.value.translation_key == "not_connectable"
+    assert err.value.translation_placeholders == {"address": ADDRESS}
 
 
 async def test_settings_survive_a_restart(hass: HomeAssistant) -> None:
@@ -256,6 +282,7 @@ async def test_removes_the_old_volume_select(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
     assert registry.async_get_entity_id("select", DOMAIN, f"{ADDRESS}_volume") is None
     assert hass.states.get(DURATION) is not None
+    assert entry.minor_version == 2
 
 
 async def test_unload(hass: HomeAssistant, entry: MockConfigEntry) -> None:

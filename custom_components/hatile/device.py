@@ -73,9 +73,13 @@ class TileDevice:
                 self._hass, self.address, connectable=True
             )
             if ble_device is None:
+                # Passive scanners hear the Tile, but cannot connect to it.
+                heard = bluetooth.async_address_present(
+                    self._hass, self.address, connectable=False
+                )
                 raise HomeAssistantError(
                     translation_domain=DOMAIN,
-                    translation_key="not_in_range",
+                    translation_key="not_connectable" if heard else "not_in_range",
                     translation_placeholders={"address": self.address},
                 )
             try:
@@ -89,7 +93,11 @@ class TileDevice:
             except (BleakError, TileProtocolError, TimeoutError) as err:
                 raise _failure(failure_key, err) from err
             finally:
-                await client.disconnect()
+                # Keep the outcome of the command, the link may already be down.
+                try:
+                    await client.disconnect()
+                except BleakError as err:
+                    _LOGGER.debug("%s: disconnecting failed: %s", self.address, err)
 
 
 def _failure(translation_key: str, err: Exception) -> HomeAssistantError:

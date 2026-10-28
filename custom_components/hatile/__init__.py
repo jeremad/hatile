@@ -15,13 +15,22 @@ PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.SELECT, Platform.
 type HatileConfigEntry = ConfigEntry[TileDevice]
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: HatileConfigEntry) -> bool:
+    """Update a config entry of an earlier version."""
+    if entry.version == 1 and entry.minor_version < 2:
+        # Remove the volume select of earlier versions: Tiles ignore the volume.
+        registry = er.async_get(hass)
+        unique_id = f"{entry.data[CONF_ADDRESS]}_volume"
+        if entity_id := registry.async_get_entity_id(
+            Platform.SELECT, DOMAIN, unique_id
+        ):
+            registry.async_remove(entity_id)
+        hass.config_entries.async_update_entry(entry, minor_version=2)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: HatileConfigEntry) -> bool:
     """Set up a Tile from a config entry."""
-    # Remove the volume select of earlier versions: Tiles ignore the volume.
-    registry = er.async_get(hass)
-    unique_id = f"{entry.data[CONF_ADDRESS]}_volume"
-    if entity_id := registry.async_get_entity_id(Platform.SELECT, DOMAIN, unique_id):
-        registry.async_remove(entity_id)
     entry.runtime_data = TileDevice(hass, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.runtime_data.coordinator.async_start())
