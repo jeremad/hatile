@@ -141,6 +141,9 @@ poetry run ruff check --fix
 poetry run ruff format
 ```
 
+GitHub Actions runs the same checks and the tests on every pull request and
+every push to `main`, from `.github/workflows/ci.yml`.
+
 Home Assistant's version comes from
 [pytest-homeassistant-custom-component](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component):
 when updating it, update the Bluetooth requirements in `pyproject.toml` to
