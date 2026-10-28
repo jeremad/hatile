@@ -1,0 +1,13 @@
+{
+  "domain": "hatile",
+  "name": "Tile (local)",
+  "codeowners": ["@jeremad"],
+  "config_flow": true,
+  "dependencies": ["bluetooth_adapters"],
+  "documentation": "https://github.com/jeremad/hatile",
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/jeremad/hatile/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

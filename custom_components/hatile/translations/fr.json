@@ -1,0 +1,62 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ajouter une Tile",
+        "description": "La Tile doit être à portée Bluetooth de Home Assistant, et ne pas être connectée à un téléphone au moment de la faire sonner.",
+        "data": {
+          "name": "Nom",
+          "address": "Adresse MAC Bluetooth",
+          "auth_key": "Clé d'authentification"
+        },
+        "data_description": {
+          "address": "Par exemple AA:BB:CC:DD:EE:FF.",
+          "auth_key": "Le champ auth_key de la Tile, tel que renvoyé par pytile (en base64, se termine par ==)."
+        }
+      }
+    },
+    "error": {
+      "invalid_address": "Saisissez une adresse MAC de la forme AA:BB:CC:DD:EE:FF.",
+      "invalid_auth_key": "La clé doit faire 16 octets, encodés en base64."
+    },
+    "abort": {
+      "already_configured": "Cette Tile est déjà configurée."
+    }
+  },
+  "entity": {
+    "button": {
+      "ring": {
+        "name": "Faire sonner"
+      },
+      "stop": {
+        "name": "Arrêter la sonnerie"
+      }
+    },
+    "select": {
+      "ring_duration": {
+        "name": "Durée de la sonnerie",
+        "state": {
+          "tile_default": "Par défaut de la Tile",
+          "once": "Une fois",
+          "10_seconds": "10 secondes",
+          "30_seconds": "30 secondes",
+          "1_minute": "1 minute",
+          "2_minutes": "2 minutes",
+          "4_minutes": "4 minutes",
+          "until_stopped": "Jusqu'à l'arrêt"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_in_range": {
+      "message": "La Tile {address} n'est pas à portée Bluetooth."
+    },
+    "ring_failed": {
+      "message": "La Tile n'a pas sonné : {error}"
+    },
+    "stop_failed": {
+      "message": "La Tile ne s'est pas arrêtée : {error}"
+    }
+  }
+}

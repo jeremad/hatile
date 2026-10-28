@@ -1,0 +1,62 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a Tile",
+        "description": "The Tile must be within Bluetooth range of Home Assistant and not connected to a phone when it rings.",
+        "data": {
+          "name": "Name",
+          "address": "Bluetooth MAC address",
+          "auth_key": "Auth key"
+        },
+        "data_description": {
+          "address": "For example AA:BB:CC:DD:EE:FF.",
+          "auth_key": "The Tile's auth_key, as returned by pytile (base64, ends with ==)."
+        }
+      }
+    },
+    "error": {
+      "invalid_address": "Enter a MAC address in the form AA:BB:CC:DD:EE:FF.",
+      "invalid_auth_key": "The auth key must be 16 bytes encoded in base64."
+    },
+    "abort": {
+      "already_configured": "This Tile is already configured."
+    }
+  },
+  "entity": {
+    "button": {
+      "ring": {
+        "name": "Ring"
+      },
+      "stop": {
+        "name": "Stop ringing"
+      }
+    },
+    "select": {
+      "ring_duration": {
+        "name": "Ring duration",
+        "state": {
+          "tile_default": "Tile default",
+          "once": "Once",
+          "10_seconds": "10 seconds",
+          "30_seconds": "30 seconds",
+          "1_minute": "1 minute",
+          "2_minutes": "2 minutes",
+          "4_minutes": "4 minutes",
+          "until_stopped": "Until stopped"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "not_in_range": {
+      "message": "The Tile {address} is not in Bluetooth range."
+    },
+    "ring_failed": {
+      "message": "The Tile did not ring: {error}"
+    },
+    "stop_failed": {
+      "message": "The Tile did not stop: {error}"
+    }
+  }
+}

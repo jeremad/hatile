@@ -1,0 +1,17 @@
+{
+  "entity": {
+    "button": {
+      "ring": {
+        "default": "mdi:bell-ring"
+      },
+      "stop": {
+        "default": "mdi:bell-off"
+      }
+    },
+    "select": {
+      "ring_duration": {
+        "default": "mdi:timer-outline"
+      }
+    }
+  }
+}
